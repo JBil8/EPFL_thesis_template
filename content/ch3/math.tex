@@ -1,36 +1,86 @@
-\chapter{Mathematics}
-In this chapter we will see some examples of mathematics.
+\chapter{Fluid-mediated stuff}
 
-Here's an example how to cite.~\cite{atc13}
+\section{Numerical Method}
+\subsection{Governing Equations}
 
-\lipsum[1]
+The fluid-structure interaction during the approach and rebound phases is governed by the coupling of the dimensionless Reynolds equation, linear elasticity, and rigid-body kinematics. 
+The fluid pressure $p(\boldsymbol{x}, t)$ within the thin film is described by the transient Reynolds equation:
+\begin{equation}
+    \frac{\partial h}{\partial t} = \text{St} \, \nabla \cdot \left( h^3 \nabla p \right)
+\end{equation}
+where $\text{St}$ is the dimensionless Stokes number and $h(\boldsymbol{x}, t)$ is the dimensionless film thickness.
+The gap profile is geometrically defined as the sum of the rigid-body separation $D(t)$, the static macroscopic shape of the indenter $s(\boldsymbol{x})$, and the elastic deformation $w(\boldsymbol{x}, t)$:
+\begin{equation}
+    h(\boldsymbol{x}, t) = D(t) + s(\boldsymbol{x}) + w(\boldsymbol{x}, t)
+\end{equation}
+Assuming the solid responds quasi-statically, the elastic deformation is computed using the Boussinesq integral for a linear elastic half-space:
+\begin{equation}
+    w(\boldsymbol{x}, t) = \frac{1}{\pi E^*} \iint_{\Omega} \frac{p(\boldsymbol{x}', t)}{|\boldsymbol{x} - \boldsymbol{x}'|} , d\boldsymbol{x}'
+\end{equation}
+where $E^*$ is the effective elastic modulus.
+The macroscopic motion of the indenter is dictated by Newton's second law, $\dot{D}(t) = V(t)$ and $\dot{V}(t) = F(t)$, where the total hydrodynamic force $F(t)$ is obtained by integrating the pressure field over the spatial domain $\Omega$:
+\begin{equation}
+    F(t) = \iint_{\Omega} p(\boldsymbol{x}, t) , d\boldsymbol{x}
+\end{equation}
+Within the thin-film approximation of lubrication theory, the surface slope is assumed to be small ($\nabla s \ll 1$). 
+Consequently, the pressure vectors are dominantly aligned with the vertical axis, and any lateral force components generating shear or torque on the indenter are considered higher-order terms and are neglected.
 
-\section{Very important formulas}
-\lipsum[2]
+\subsection{Semi-Implicit Temporal Discretization}
 
-\begin{equation}\label{eqn:rate_eqns}
-\frac{\textrm{d}}{\textrm{d}t}\left[
-\begin{array}{l}
-P_{\textit{0}} \\
-P_{\textit{1}} \\
-P_{\textit{T}}
-\end{array}
-\right] =
-\left[
-\begin{array}{l}
-\frac{P_{\textit{1}}}{\tau_{\textit{10}}} + \frac{P_{\textit{T}}}{\tau_{\textit{T}}} - \frac{P_{\textit{0}}}{\tau_{\textit{ex}}} \\
-- \frac{P_{\textit{1}}}{\tau_{\textit{10}}} - \frac{P_{\textit{1}}}{\tau_{isc}} + \frac{P_{\textit{0}}}{\tau_{\textit{ex}}} \\
-\frac{P_{\textit{1}}}{\tau_{isc}} -  \frac{P_{\textit{T}}}{\tau_{\textit{T}}}
-\end{array}
-\right]
+To avoid the prohibitive computational cost of solving a fully coupled non-linear Newton-Raphson system at each time step, following Liu CITE we employ a semi-implicit backward Euler discretization. 
+The rigid-body kinematics and elastic deformation are evaluated implicitly to maintain stability, while the highly non-linear fluid conductance term ($h^3$) is explicitly frozen at the known previous time step, $t^n$.
+Setting a constant time step of size $\Delta t$, the time derivative of the film thickness is approximated as:
+\begin{equation}
+    \frac{h^{n+1} - h^n}{\Delta t} = V^{n+1} + \frac{w^{n+1} - w^n}{\Delta t}
+\end{equation}
+Substituting this into the Reynolds equation yields a linear system for the unknown future pressure $p^{n+1}$:
+\begin{equation}
+w^{n+1} - \Delta t , \text{St} , \nabla \cdot \left( (h^n)^3 \nabla p^{n+1} \right) = w^n - \Delta t V^n
 \end{equation}
 
-\lipsum[3]
+\subsection{Spatial Discretization}
 
-
-\begin{equation}\label{eqn:avgfluorescence}
-\bar{I_{f}}(\vec{r})
-	= \gamma(\vec{r}) \left(1 - \frac{\tau_{\textit{T}} P_{\textit{T}}^{{eq}}\left(1-\exp \left(-\frac{(T_p - t_p)}{\tau_{\textit{T}}}\right)\right)}{1-\exp\left(-\frac{(T_p - t_p)}{\tau_{\textit{T}}} + k_{\textit{2}} t_p\right)} \times \frac{\left(\exp\left(k_{\textit{2}} t_p\right)-1\right)}{t_p} \right)
+The spatial domain is discretized using a uniform Cartesian grid with dimensions $N \times N$ and spacing $\Delta x = \Delta y$.
+The Reynolds diffusion operator is discretized using a conservative Finite Volume approach.
+The pressure and film thickness are evaluated at the cell centers, while the fluid fluxes are evaluated at the cell faces using staggered grid interpolation.
+For a given cell $(i, j)$, the discrete divergence operator is formulated as:
+\begin{equation}
+    \nabla \cdot \left( h^3 \nabla p \right) \approx \frac{F_e - F_w}{\Delta x} + \frac{F_n - F_s}{\Delta y}
 \end{equation}
+where the face fluxes are computed utilizing a simple arithmetic average for the interface film thickness:
+\begin{align}
+F_e &= \left( \frac{h_{i,j} + h_{i+1,j}}{2} \right)^3 \frac{p_{i+1,j} - p_{i,j}}{\Delta x} \\
+F_w &= \left( \frac{h_{i-1,j} + h_{i,j}}{2} \right)^3 \frac{p_{i,j} - p_{i-1,j}}{\Delta x} \\
+F_n &= \left( \frac{h_{i,j} + h_{i,j+1}}{2} \right)^3 \frac{p_{i,j+1} - p_{i,j}}{\Delta y} \\
+F_s &= \left( \frac{h_{i,j-1} + h_{i,j}}{2} \right)^3 \frac{p_{i,j} - p_{i,j-1}}{\Delta y}
+\end{align}
+A zero-pressure Dirichlet boundary condition, $p=0$, is enforced at the edges of the computational domain.
 
-\lipsum[3]
+\subsection{Matrix-Free Linear Operator and Preconditioning}
+
+For high-resolution 3D grids (e.g., $N=1024$), building the dense analytical Jacobian for the elastic deformation matrix would require $\mathcal{O}(N^4)$ memory (exceeding terabytes of RAM for floating point decimals), rendering standard direct solvers impossible.
+Thus, we recast the semi-implicit scheme as a matrix-free linear operator $\mathcal{L}(p^{n+1}) = b$, where:
+\begin{equation}
+    \mathcal{L}(p) = \mathcal{K} * p - \Delta t , \text{St} \, \nabla_d \cdot \left( (h^n)^3 \nabla_d p \right)
+\end{equation}
+and:
+\begin{equation}
+    b = w^n - \Delta t \, V^{n} \, .
+\end{equation}
+To decouple the macroscopic kinematics from the distributed pressure field, the indenter velocity is treated explicitly during the pressure solve ($V^n$).
+Once $p^{n+1}$ is computed, the hydrodynamic force is integrated, and the velocity is updated explicitly via $V^{n+1} = V^n + \Delta t \, F(p^{n+1})$.
+Here, the Boussinesq convolution $\mathcal{K} * p$ is evaluated in the frequency domain using the Fast Fourier Transform (FFT). 
+To prevent unphysical circular convolution artifacts inherent to the discrete Fourier transform, the pressure domain is zero-padded to size $2N \times 2N$ prior to the FFT.
+This linear system is solved using the BiConjugate Gradient Stabilized method (BiCGSTAB), natively compiled via JAX for GPU execution.
+BiCGSTAB is specifically chosen over GMRES due to its strict $\mathcal{O}(1)$ memory footprint, which avoids the catastrophic memory limits associated with explicitly storing large Krylov subspaces on XLA graphs.
+To accelerate convergence and stabilize the Reynolds diffusion operator, we apply a diagonal Jacobi preconditioner.
+The diagonal coefficient for a given cell $(i, j)$ is the sum of the local elastic self-influence and the discrete Reynolds matrix trace:
+\begin{equation}
+    M_{i,j} = K_{0,0} + \frac{4 \, \Delta t \, \text{St}}{\Delta x^2} (h_{i,j}^n)^3
+\end{equation}
+where $K_{0,0}$ is the analytical integral of the Boussinesq kernel over a single square cell $[-\Delta x/2, \Delta x/2]^2$:
+\begin{equation}
+    K_{0,0} = \frac{4 \Delta x}{\pi E^*} \ln(1+\sqrt{2})
+\end{equation}
+The linear system is preconditioned by multiplying both sides by $M^{-1}$, effectively normalizing the heterogeneous stiffness introduced by the cubic film thickness field and ensuring robust solver performance throughout the impact cycle.
+Once the pressure is computed, the deformation is found by evaluating the discrete Boussinesq convolution $w^{n+1} = \mathcal{K} * p^{n+1}$ in the frequency domain, where the precomputed elastic kernel is multiplied point-wise with the transformed pressure field using the Fast Fourier Transform.
